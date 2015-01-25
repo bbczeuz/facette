@@ -291,6 +291,7 @@ func (library *Library) StoreItem(item interface{}, itemType int) error {
 		return os.ErrInvalid
 	}
 
+	// If item has no ID specified, generate one
 	if itemStruct.ID == "" {
 		uuidTemp, err := uuid.NewV4()
 		if err != nil {
