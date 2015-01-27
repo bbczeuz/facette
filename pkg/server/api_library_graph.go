@@ -1,12 +1,14 @@
 package server
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
+	"text/template"
 	"time"
 
 	"github.com/facette/facette/pkg/config"
@@ -223,6 +225,14 @@ func (server *Server) serveGraphPlots(writer http.ResponseWriter, request *http.
 		return
 	}
 
+	// If linked graph, expand its template
+	if graph.Link != "" {
+		if graph, err = server.expandGraphTemplate(graph.Link, graph.Attributes); err != nil {
+			logger.Log(logger.LevelError, "server", "unable to apply graph template: %s", err)
+			server.serveResponse(writer, serverResponse{mesgUnhandledError}, http.StatusInternalServerError)
+		}
+	}
+
 	// Prepare queries to be executed by the providers
 	providerQueries, err := server.prepareProviderQueries(plotReq, graph)
 	if err != nil {
@@ -345,6 +355,51 @@ func (server *Server) prepareProviderQueries(plotReq *PlotRequest,
 	}
 
 	return providerQueries, nil
+}
+
+func (server *Server) expandGraphTemplate(id string, attr map[string]interface{}) (*library.Graph, error) {
+	// Get graph template from library
+	item, err := server.Library.GetItem(id, library.LibraryItemGraph)
+	if err != nil {
+		return nil, fmt.Errorf("graph template not found")
+	}
+
+	graph := item.(*library.Graph)
+
+	titleBuf := bytes.NewBuffer(nil)
+	titleTpl, _ := template.New("title").Parse(graph.Title)
+	if err := titleTpl.Execute(titleBuf, attr); err != nil {
+		return nil, fmt.Errorf("error while executing template: %s", err)
+	}
+	graph.Title = titleBuf.String()
+
+	sourceBuf, metricBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
+	for _, group := range graph.Groups {
+		for _, series := range group.Series {
+			sourceTpl, err := template.New("source").Parse(series.Source)
+			if err != nil {
+				return nil, fmt.Errorf("error while parsing template: %s", err)
+			}
+			if err := sourceTpl.Execute(sourceBuf, attr); err != nil {
+				return nil, fmt.Errorf("error while executing template: %s", err)
+			}
+			series.Source = sourceBuf.String()
+
+			metricTpl, err := template.New("metric").Parse(series.Metric)
+			if err != nil {
+				return nil, fmt.Errorf("error while parsing template: %s", err)
+			}
+			if err := metricTpl.Execute(metricBuf, attr); err != nil {
+				return nil, fmt.Errorf("error while executing template: %s", err)
+			}
+			series.Metric = metricBuf.String()
+
+			sourceBuf.Reset()
+			metricBuf.Reset()
+		}
+	}
+
+	return graph, nil
 }
 
 func parsePlotRequest(request *http.Request) (*PlotRequest, error) {
