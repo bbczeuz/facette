@@ -21,10 +21,7 @@ import (
 )
 
 func (server *Server) serveGraph(writer http.ResponseWriter, request *http.Request) {
-	var (
-		graph *library.Graph
-		err   error
-	)
+	var graph *library.Graph
 
 	if request.Method != "GET" && request.Method != "HEAD" && server.Config.ReadOnly {
 		server.serveResponse(writer, serverResponse{mesgReadOnlyMode}, http.StatusForbidden)
@@ -32,10 +29,6 @@ func (server *Server) serveGraph(writer http.ResponseWriter, request *http.Reque
 	}
 
 	graphID := strings.TrimPrefix(request.URL.Path, urlLibraryPath+"graphs/")
-	if graphID == "" {
-		server.serveResponse(writer, serverResponse{mesgMissingParameter}, http.StatusBadRequest)
-		return
-	}
 
 	switch request.Method {
 	case "DELETE":
@@ -79,29 +72,43 @@ func (server *Server) serveGraph(writer http.ResponseWriter, request *http.Reque
 			server.serveResponse(writer, response, status)
 			return
 		}
-		// Request body contains JSON graph definition
-		graphDef, _ := ioutil.ReadAll(request.Body)
 
-		if request.Method == "POST" {
-			if request.FormValue("inherit") != "" {
-				if graph, err = server.Library.CloneGraph(graphDef, request.FormValue("inherit")); err != nil {
-					logger.Log(logger.LevelError, "server", "unable to clone graph: %s", err)
-				}
-			} else {
-				if graph, err = server.Library.CreateGraph(graphDef, nil); err != nil {
-					logger.Log(logger.LevelError, "server", "unable to create graph: %s", err)
-				}
+		// Inheritance requested: clone an existing graph
+		if request.Method == "POST" && request.FormValue("inherit") != "" {
+			item, err := server.Library.GetItem(request.FormValue("inherit"), library.LibraryItemGraph)
+			if os.IsNotExist(err) {
+				server.serveResponse(writer, serverResponse{mesgResourceNotFound}, http.StatusNotFound)
+				return
+			} else if err != nil {
+				logger.Log(logger.LevelError, "server", "%s", err)
+				server.serveResponse(writer, serverResponse{mesgUnhandledError}, http.StatusInternalServerError)
+				return
 			}
+
+			// Clone item
+			graph = &library.Graph{}
+			utils.Clone(item.(*library.Graph), graph)
+
+			// Reset item identifier
+			graph.ID = ""
 		} else {
-			if graph, err = server.Library.UpdateGraph(graphDef, graphID); err != nil {
-				logger.Log(logger.LevelError, "server", "unable to update graph: %s", err)
-			}
+			// Create a new graph instance
+			graph = &library.Graph{Item: library.Item{ID: graphID}}
 		}
 
-		if err != nil {
-			// TODO: we should return a more suited HTTP status code according to the actual error
+		// Parse input JSON for graph data
+		body, _ := ioutil.ReadAll(request.Body)
+
+		if err := json.Unmarshal(body, graph); err != nil {
 			logger.Log(logger.LevelError, "server", "%s", err)
-			server.serveResponse(writer, serverResponse{mesgUnhandledError}, http.StatusInternalServerError)
+			server.serveResponse(writer, serverResponse{mesgResourceInvalid}, http.StatusBadRequest)
+			return
+		}
+
+		err := server.Library.StoreItem(graph, library.LibraryItemGraph)
+		if response, status := server.parseError(writer, request, err); status != http.StatusOK {
+			logger.Log(logger.LevelError, "server", "%s", err)
+			server.serveResponse(writer, response, status)
 			return
 		}
 

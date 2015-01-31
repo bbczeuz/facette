@@ -3,8 +3,6 @@
 package library
 
 import (
-	"encoding/json"
-	"fmt"
 	"os"
 	"path"
 	"regexp"
@@ -121,51 +119,4 @@ func (library *Library) Refresh() error {
 	logger.Log(logger.LevelInfo, "library", "refresh completed")
 
 	return nil
-}
-
-// CreateGraph registers a new graph to the library
-func (library *Library) CreateGraph(def []byte, graph *Graph) (*Graph, error) {
-	if graph == nil {
-		graph = &Graph{}
-	}
-
-	if err := json.Unmarshal(def, graph); err != nil {
-		return nil, fmt.Errorf("unable to unmarshal graph definition: %s", err)
-	}
-
-	if err := library.StoreItem(graph, LibraryItemGraph); err != nil {
-		return nil, fmt.Errorf("unable to store graph: %s", err)
-	}
-
-	return graph, nil
-}
-
-// UpdateGraph updates an existing graph
-func (library *Library) UpdateGraph(def []byte, id string) (*Graph, error) {
-	if id == "" {
-		return nil, fmt.Errorf("no graph ID provided")
-	}
-
-	graph, err := library.GetItem(id, LibraryItemGraph)
-	if err != nil {
-		return nil, fmt.Errorf("graph not found")
-	}
-
-	return library.CreateGraph(def, graph.(*Graph))
-}
-
-// CloneGraph clones an existing graph
-func (library *Library) CloneGraph(def []byte, source string) (*Graph, error) {
-	sourceGraph, err := library.GetItem(source, LibraryItemGraph)
-	if err != nil {
-		return nil, fmt.Errorf("source graph not found")
-	}
-
-	graph := &Graph{}
-	utils.Clone(sourceGraph.(*Graph), graph)
-
-	// Reset graph ID
-	graph.ID = ""
-
-	return library.CreateGraph(def, graph)
 }
