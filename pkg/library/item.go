@@ -397,7 +397,7 @@ func (library *Library) StoreItem(item interface{}, itemType int) error {
 		library.Collections[itemStruct.ID].ID = itemStruct.ID
 	}
 
-	item.Modified = time.Now()
+	itemStruct.Modified = time.Now()
 
 	// Store JSON data
 	if err := utils.JSONDump(library.getFilePath(itemStruct.ID, itemType), item, itemStruct.Modified); err != nil {
