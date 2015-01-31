@@ -9,7 +9,6 @@ import (
 	"path"
 	"regexp"
 	"strings"
-	"time"
 
 	"github.com/facette/facette/pkg/catalog"
 	"github.com/facette/facette/pkg/config"
@@ -133,8 +132,6 @@ func (library *Library) CreateGraph(def []byte, graph *Graph) (*Graph, error) {
 	if err := json.Unmarshal(def, graph); err != nil {
 		return nil, fmt.Errorf("unable to unmarshal graph definition: %s", err)
 	}
-
-	graph.Modified = time.Now()
 
 	if err := library.StoreItem(graph, LibraryItemGraph); err != nil {
 		return nil, fmt.Errorf("unable to store graph: %s", err)
