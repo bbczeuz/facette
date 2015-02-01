@@ -158,6 +158,11 @@ func (server *Server) serveGraphList(writer http.ResponseWriter, request *http.R
 	items = make(ItemListResponse, 0)
 
 	for _, graph := range server.Library.Graphs {
+		// Exclude graph templates from list
+		if graph.Template {
+			continue
+		}
+
 		if !graphSet.IsEmpty() && !graphSet.Has(graph.ID) {
 			continue
 		}
