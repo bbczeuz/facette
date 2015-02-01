@@ -34,14 +34,18 @@ const (
 // Graph represents a graph containing list of series.
 type Graph struct {
 	Item
-	Title      string                 `json:"title"`
-	Type       int                    `json:"type"`
-	Template   bool                   `json:"template"`
+	Template bool `json:"template"`
+
+	// For plain/template graphs definitions
+	Title      string       `json:"title"`
+	Type       int          `json:"type"`
+	StackMode  int          `json:"stack_mode"`
+	UnitType   int          `json:"unit_type"`
+	UnitLegend string       `json:"unit_legend"`
+	Groups     []*OperGroup `json:"groups,omitempty"`
+
+	// For linked graphs
 	Link       string                 `json:"link,omitempty"`
-	StackMode  int                    `json:"stack_mode"`
-	UnitType   int                    `json:"unit_type"`
-	UnitLegend string                 `json:"unit_legend"`
-	Groups     []*OperGroup           `json:"groups"`
 	Attributes map[string]interface{} `json:"attributes,omitempty"`
 }
 

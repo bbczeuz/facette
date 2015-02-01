@@ -1,14 +1,12 @@
 package server
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"strings"
-	"text/template"
 	"time"
 
 	"github.com/facette/facette/pkg/config"
@@ -166,6 +164,23 @@ func (server *Server) serveGraphList(writer http.ResponseWriter, request *http.R
 
 		if request.FormValue("filter") != "" && !utils.FilterMatch(request.FormValue("filter"), graph.Name) {
 			continue
+		}
+
+		// If linked graph, expand the templated description field
+		if graph.Link != "" {
+			item, err := server.Library.GetItem(graph.Link, library.LibraryItemGraph)
+
+			if err != nil {
+				logger.Log(logger.LevelError, "server", "graph template not found")
+			} else {
+				graphTemplate := item.(*library.Graph)
+
+				if graph.Description, err = expandStringTemplate(
+					graphTemplate.Description,
+					graph.Attributes); err != nil {
+					logger.Log(logger.LevelError, "server", "failed to expand graph description: %s", err)
+				}
+			}
 		}
 
 		items = append(items, &ItemResponse{
@@ -377,36 +392,19 @@ func (server *Server) expandGraphTemplate(id string, attr map[string]interface{}
 
 	graph := item.(*library.Graph)
 
-	titleBuf := bytes.NewBuffer(nil)
-	titleTpl, _ := template.New("title").Parse(graph.Title)
-	if err := titleTpl.Execute(titleBuf, attr); err != nil {
-		return nil, fmt.Errorf("error while executing template: %s", err)
+	if graph.Title, err = expandStringTemplate(graph.Title, attr); err != nil {
+		return nil, fmt.Errorf("failed to expand graph title: %s", err)
 	}
-	graph.Title = titleBuf.String()
 
-	sourceBuf, metricBuf := bytes.NewBuffer(nil), bytes.NewBuffer(nil)
 	for _, group := range graph.Groups {
 		for _, series := range group.Series {
-			sourceTpl, err := template.New("source").Parse(series.Source)
-			if err != nil {
-				return nil, fmt.Errorf("error while parsing template: %s", err)
+			if series.Source, err = expandStringTemplate(series.Source, attr); err != nil {
+				return nil, fmt.Errorf("failed to expand graph series %q source: %s", series.Name, err)
 			}
-			if err := sourceTpl.Execute(sourceBuf, attr); err != nil {
-				return nil, fmt.Errorf("error while executing template: %s", err)
-			}
-			series.Source = sourceBuf.String()
 
-			metricTpl, err := template.New("metric").Parse(series.Metric)
-			if err != nil {
-				return nil, fmt.Errorf("error while parsing template: %s", err)
+			if series.Metric, err = expandStringTemplate(series.Metric, attr); err != nil {
+				return nil, fmt.Errorf("failed to expand graph series %q metric: %s", series.Metric, err)
 			}
-			if err := metricTpl.Execute(metricBuf, attr); err != nil {
-				return nil, fmt.Errorf("error while executing template: %s", err)
-			}
-			series.Metric = metricBuf.String()
-
-			sourceBuf.Reset()
-			metricBuf.Reset()
 		}
 	}
 
