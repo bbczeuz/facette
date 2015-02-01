@@ -157,12 +157,16 @@ func (server *Server) serveGraphList(writer http.ResponseWriter, request *http.R
 	// Fill graphs list
 	items = make(ItemListResponse, 0)
 
+	// Flag for listing only graph templates
+	showTemplates := request.FormValue("templates") == "true" || request.FormValue("templates") == "1"
+
 	for _, graph := range server.Library.Graphs {
-		// Exclude graph templates from list
-		if graph.Template {
+		// Depending on the template flag, filter out either graphs or graph templates
+		if graph.Template && !showTemplates || !graph.Template && showTemplates {
 			continue
 		}
 
+		// Filter out graphs that don't belong in the targeted collection
 		if !graphSet.IsEmpty() && !graphSet.Has(graph.ID) {
 			continue
 		}
